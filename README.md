@@ -1,5 +1,9 @@
 # Fiscal Futures FY2026
 
+## Current consolidated report
+
+Use `revenue_report_fy26_consolidated.qmd` for the maintained report. It displays local pension-comparison tabs beside tables and figures, derives fiscal-year labels from `report_year`, and writes both presentations to `outputs/`. Run `./render-pension-reports.ps1` to build the comparison and both standalone reports. See [PENSION-CONSOLIDATION.md](PENSION-CONSOLIDATION.md) for parameters, the preliminary uncategorized-data override, and accounting decisions. The two original QMDs are retained as legacy references; the descriptions below document that original workflow.
+
 This project contains the report-specific code and rendered output for the FY2026 Fiscal Futures work. It uses the shared datasets maintained in the neighboring **Fiscal-Future-Topics** project.
 
 The data are stored centrally so that separate annual projects do not accumulate copied datasets that can diverge. The FY2026 project reads the shared files directly, and its spreadsheet exports are also saved in the shared annual data folder.
