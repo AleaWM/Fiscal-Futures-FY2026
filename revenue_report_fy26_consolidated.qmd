@@ -1,0 +1,105 @@
+---
+title: "Fiscal Futures: Pension Presentation Comparison"
+output-file: fiscal_report_FY2026_pension_comparison.html
+params:
+  report_year: 2026
+  pension_view: both
+  data_dir: null
+  allow_uncategorized: false
+  export_dir: "outputs"
+  write_excel: true
+format:
+  html:
+    theme: zephyr
+    toc: true
+    toc-location: left
+    code-fold: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+  error: false
+  cache: false
+---
+
+```{r}
+#| label: consolidated-setup
+#| include: false
+stopifnot(params$pension_view %in% c("both", "agency", "separate"))
+stopifnot(length(params$report_year) == 1, is.numeric(params$report_year),
+          !is.na(params$report_year), params$report_year == as.integer(params$report_year),
+          params$report_year > 1999)
+shared <- new.env(parent = globalenv())
+shared$report_year <- as.integer(params$report_year)
+shared$data_dir <- if (is.null(params$data_dir)) file.path("..", "Fiscal-Future-Topics", "data",
+  paste0("FY", shared$report_year, " Files")) else params$data_dir
+shared$allow_uncategorized <- isTRUE(params$allow_uncategorized)
+stopifnot(file.exists(file.path(shared$data_dir, "rev_temp.csv")),
+          file.exists(file.path(shared$data_dir, "exp_temp.csv")))
+sys.source("R/prepare-fiscal-report.R", envir = shared)
+source("R/aggregate-fiscal-report.R")
+views <- list(agency = aggregate_view(shared, "agency"),
+              separate = aggregate_view(shared, "separate"))
+view_labels <- c(agency = "Pensions within agencies", separate = "Pensions separately")
+view_suffix <- c(agency = "pensions_with_agencies", separate = "pensions_separate")
+
+# Reconcile final totals, including separately handled debt and local transfers.
+check <- merge(views$agency$year_totals, views$separate$year_totals,
+               by = "Year", suffixes = c("_agency", "_separate"), all = TRUE)
+for (field in c("Revenue", "Expenditures", "Fiscal Gap")) {
+  delta <- check[[paste0(field, "_agency")]] - check[[paste0(field, "_separate")]]
+  if (anyNA(delta) || any(abs(delta) > 0.000001)) {
+    stop("Pension views do not reconcile for ", field)
+  }
+}
+stopifnot(shared$report_year %in% views$agency$year_totals$Year)
+selected_views <- if (params$pension_view == "both") names(views) else params$pension_view
+source("R/export-fiscal-report.R")
+source("R/render-fiscal-sections.R")
+```
+
+Fiscal year: **`r params$report_year`**. Amounts are nominal dollars; individual tables and figures identify their units.
+
+Both views use the same expenditure inclusion rules. The separate view moves identified pension expenditures into **Pension Expenditure**. Statewide revenue, expenditure, and fiscal-gap totals are checked for agreement for every year before exports are written.
+
+Use the tabs beside expenditure outputs and bar graphs to compare pension presentations. Revenue, statewide totals, fund-type comparisons, and Medicaid/provider-tax analyses appear once because they do not change between pension presentations.
+
+Non-pension spending by retirement agencies currently stays in the agency categories in both views. The review section below records the alternative treatment in the older separate-pension report; no decision on that treatment has been imposed.
+
+```{r}
+#| label: pension-tabs
+#| results: asis
+template <- readLines("report-parts/fiscal-report-sections.Rmd", warn = FALSE)
+if (isTRUE(params$allow_uncategorized)) {
+  cat("\n::: {.callout-warning}\n## Preliminary estimates\nUncategorized amounts are retained in totals. Review the Uncategorized review sheets before publication.\n:::\n\n")
+}
+render_fiscal_sections(template, views[selected_views], view_labels)
+cat("\n## Excel downloads\n\n")
+for (view in selected_views) {
+  env <- views[[view]]
+  if (isTRUE(params$write_excel)) {
+    files <- export_fiscal_report(env, view, view_suffix[[view]], params$export_dir,
+      shared$retirement_review, shared$pension_inclusion_review, check)
+  } else {
+    files <- file.path(params$export_dir, paste0(c("summary_", "IGPA_Datahub_"),
+      "FY", params$report_year, "_", view_suffix[[view]], ".xlsx"))
+  }
+  if (all(file.exists(files))) {
+    cat("\n### ", view_labels[[view]], "\n\n", sep = "")
+    for (file in files) cat("- [", basename(file), "](", gsub(" ", "%20", file), ")\n", sep = "")
+  }
+}
+
+```
+
+# Retirement-agency decisions pending
+
+This table shows retained non-pension expenditures, in **dollars**, with their current category and the older separate-pension report's effective category. That report assigns these costs to `948` (Other Departments), except SURS, whose earlier higher-education rule keeps it in `960`. Pension identification uses the older separate report's object/fund rules, while accounting inclusion preserves the agency report's narrower adjustments. Identified pension items excluded by that baseline are listed in the workbook's **Pension inclusion review** sheet.
+
+```{r}
+#| label: retirement-decisions
+knitr::kable(shared$retirement_review, digits = 2)
+```
+
+See **PENSION-CONSOLIDATION.md** for the exact legacy locations and other differences between the original reports.
